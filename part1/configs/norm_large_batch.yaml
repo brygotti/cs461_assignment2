@@ -1,0 +1,11 @@
+tta:
+  name: norm_large_batch
+  class_path: tta.norm.TestTimeNorm
+  args:
+    eps: 1.0e-5
+    momentum: 0.1
+    reset_stats: false
+    no_stats: false
+
+evaluation:
+  batch_size: 512
