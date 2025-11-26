@@ -27,10 +27,9 @@ class Tent(TTAMethod):
         optim_nesterov=True,
         optim_wd=0.0,
     ):
-        super().__init__()
-
         model = configure_model(model)
         check_model(model)
+        super().__init__(model)
 
         params, _ = collect_params(model)
         optimizer = setup_optimizer(
@@ -43,8 +42,6 @@ class Tent(TTAMethod):
             optim_nesterov,
             optim_wd,
         )
-
-        self.model = model
         self.optimizer = optimizer
         self.steps = optim_steps
         assert optim_steps > 0, "tent requires >= 1 step(s) to forward and update"
