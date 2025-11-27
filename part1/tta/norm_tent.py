@@ -64,10 +64,6 @@ class NormTent(TTAMethod):
         self.norm_batch_size = norm_batch_size
 
     def forward(self, x):
-        assert (
-            x.size(0) == self.batch_size
-        ), f"input batch size {x.size(0)} does not match configured batch size {self.batch_size}"
-
         # forward with norm adaptation
         self.configure_norm()
         with torch.no_grad():
