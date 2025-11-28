@@ -6,14 +6,14 @@ from pathlib import Path
 import torch
 from tqdm import tqdm
 
-from part1.eval import (
+from eval import (
     _evaluate_loader,
     _safe_reset,
     _summarize,
     evaluate_from_config,
     pretty_print_results,
 )
-from part1.utils import build_model, load_cfg, load_full_dataset, locate, parse_args
+from utils import build_model, load_cfg, load_full_dataset, locate, parse_args
 
 BASE_CONFIG = Path("configs/tent.yaml")
 
