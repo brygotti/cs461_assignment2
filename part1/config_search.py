@@ -10,7 +10,6 @@ from eval import (
     _evaluate_loader,
     _safe_reset,
     _summarize,
-    evaluate_from_config,
     pretty_print_results,
 )
 from utils import build_model, load_cfg, load_full_dataset, locate, parse_args
@@ -28,14 +27,21 @@ def apply_overrides(cfg: DictConfig, overrides: Dict[str, Any]):
         OmegaConf.update(cfg, key, value, merge=False)
 
 
-def evaluate_from_config_val(
-    cfg_or_path, corruptions=None, print_results=True, baseline=None
+def deterministic_random_split(dataset, lengths, seed=42):
+    g = torch.Generator().manual_seed(seed)
+    return torch.utils.data.random_split(dataset, lengths, generator=g)
+
+
+def evaluate_from_config(
+    cfg_or_path, corruptions=None, print_results=True, baseline=None, split="test"
 ) -> Dict[str, Any]:
     # load cfg
     cfg = load_cfg(cfg_or_path)
 
     # load full_dataset
-    dataset_cls, dataset_args = load_full_dataset(cfg.dataset, {"kind": "exploratory"})
+    dataset_cls, dataset_args = load_full_dataset(
+        cfg.dataset, {"kind": "public_test_bench"}
+    )
     full_dataset = dataset_cls(**dataset_args)
 
     # load base model
@@ -70,8 +76,15 @@ def evaluate_from_config_val(
         leave=False,
     ):
         scenario_dataset = full_dataset.filter_by_corruption(corruption)
+        val_split, test_split = deterministic_random_split(scenario_dataset, [0.3, 0.7])
+        if split == "test":
+            scenario_split = test_split
+        elif split == "val":
+            scenario_split = val_split
+        else:
+            raise ValueError(f"Invalid split: {split}. Choose 'val' or 'test'.")
         loader = torch.utils.data.DataLoader(
-            scenario_dataset, batch_size=eval_cfg.get("batch_size", 128), shuffle=False
+            scenario_split, batch_size=eval_cfg.get("batch_size", 128), shuffle=False
         )
 
         _safe_reset(tta_method)
@@ -102,7 +115,7 @@ if __name__ == "__main__":
     best_cfg: DictConfig | None = None
 
     print(
-        f"Starting grid search over {len(combos)} configurations on exploratory dataset...\n"
+        f"Starting grid search over {len(combos)} configurations on 30% public test bench...\n"
     )
 
     for index, combo in enumerate(combos):
@@ -110,7 +123,7 @@ if __name__ == "__main__":
         current_cfg = OmegaConf.create(OmegaConf.to_container(cfg, resolve=True))
         apply_overrides(current_cfg, overrides)
 
-        result = evaluate_from_config_val(current_cfg, print_results=False)
+        result = evaluate_from_config(current_cfg, print_results=False, split="val")
         score = float(result["aggregate"].get("mean_accuracy", 0.0))
         print(f"conf{index}: mean_accuracy={score:.4f}")
 
@@ -122,6 +135,6 @@ if __name__ == "__main__":
     print(OmegaConf.to_yaml(best_cfg))
     print(f"Best Mean Accuracy: {best_score:.4f}")
 
-    result = evaluate_from_config(best_cfg, print_results=False)
+    result = evaluate_from_config(best_cfg, print_results=False, split="test")
     score = float(result["aggregate"].get("mean_accuracy", 0.0))
-    print(f"\nBest Configuration Mean Accuracy on public test bench: {score:.4f}")
+    print(f"\nBest Configuration Mean Accuracy on 70% public test bench: {score:.4f}")
