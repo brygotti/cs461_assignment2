@@ -93,7 +93,7 @@ def evaluate_from_config_val(
 
 
 if __name__ == "__main__":
-    cfg: DictConfig = OmegaConf.load(BASE_CONFIG)
+    cfg: DictConfig = load_cfg(BASE_CONFIG)
 
     keys = list(PARAM_GRID.keys())
     combos = list(itertools.product(*(PARAM_GRID[k] for k in keys))) if keys else [()]
