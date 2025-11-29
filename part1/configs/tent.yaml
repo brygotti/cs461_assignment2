@@ -3,7 +3,7 @@ tta:
   class_path: tta.tent.Tent
   args:
     episodic: false
-    optim_steps: 2
+    optim_steps: 10
     optim_lr: 0.0001
     optim_method: Adam
     optim_beta: 0.9
