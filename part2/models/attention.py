@@ -63,7 +63,7 @@ class Attention(nn.Module):
         M = torch.bmm(A, x)  # batch_size, attention_heads, embed_dim
 
         if not self.multi_head:
-            x = x.squeeze(1)  # batch_size, embed_dim
+            M = M.squeeze(1)  # batch_size, embed_dim
             x = self.linear(M)  # batch_size, num_classes
         else:
             # multi-head: one class per head, each output goes through a dedicated linear projection
