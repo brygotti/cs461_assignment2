@@ -8,24 +8,23 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
+from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import DataLoader, Subset
 from tqdm import tqdm
 
 
 def attention_collate_fn(batch):
-    """
-    Custom collate function to handle variable number of crops per patient.
-    """
-    embeddings_list = []
-    labels_list = []
+    """Pad variable-length bags and return a mask for the real patches."""
+    embeddings_list, labels_list = zip(*batch)
 
-    for embeddings, label in batch:
-        embeddings_list.append(embeddings)
-        labels_list.append(label)
+    lengths = torch.tensor([emb.shape[0] for emb in embeddings_list], dtype=torch.long)
+    padded_embeddings = pad_sequence(embeddings_list, batch_first=True)
+
+    max_len = padded_embeddings.size(1)
+    mask = torch.arange(max_len).unsqueeze(0) < lengths.unsqueeze(1)
 
     labels = torch.tensor(labels_list, dtype=torch.long)
-    embeddings = torch.stack(embeddings_list)
-    return embeddings, labels.long()
+    return padded_embeddings, mask, labels
 
 
 class Attention(nn.Module):
@@ -51,17 +50,25 @@ class Attention(nn.Module):
         )
         self.linear = nn.Linear(self.embed_dim, self.linear_output_dim)
 
-    def forward(self, x):
-        # x: n_batches, n_patches, embed_dim
-        A = self.attention(x)  # n_batches, n_patches, attention_heads
-        A = torch.transpose(A, 1, 2)  # n_batches, attention_heads, n_patches
-        A = F.softmax(A, dim=2)  # n_batches, attention_heads, n_patches
-        M = torch.bmm(A, x)  # n_batches, attention_heads, embed_dim
+    def forward(self, x, mask=None):
+        # x: batch_size, n_patches, embed_dim
+        A = self.attention(x)  # batch_size, n_patches, attention_heads
+        A = torch.transpose(A, 1, 2)  # batch_size, attention_heads, n_patches
 
-        x = self.linear(M)  # n_batches, attention_heads, linear_output_dim
-        x = x.squeeze(dim=(1, 2))  # n_batches, num_classes
-        if self.eval:
-            x = torch.softmax(x, dim=1)
+        if mask is not None:
+            mask = mask.unsqueeze(1)  # batch_size, 1, n_patches
+            A = A.masked_fill(~mask, float("-inf"))
+        A = F.softmax(A, dim=2)  # batch_size, attention_heads, n_patches
+
+        M = torch.bmm(A, x)  # batch_size, attention_heads, embed_dim
+
+        x = self.linear(M)  # batch_size, attention_heads, linear_output_dim
+        if self.multi_head:
+            x = x.squeeze(2)  # batch_size, attention_heads
+        else:
+            x = x.squeeze(1)  # batch_size, linear_output_dim
+        if not self.training:
+            x = F.softmax(x, dim=1)
         return x
 
     def train_with_cv(
@@ -127,7 +134,12 @@ class Attention(nn.Module):
             )
 
             # Reset model for this fold
-            self.__init__(self.embed_dim, self.num_classes)
+            self.__init__(
+                self.embed_dim,
+                self.latent_dim,
+                self.num_classes,
+                self.multi_head,
+            )
             self.to(device)
 
             criterion = nn.CrossEntropyLoss()
@@ -151,14 +163,15 @@ class Attention(nn.Module):
                 train_preds = []
                 train_labels = []
 
-                for embeddings, labels in tqdm(
+                for embeddings, mask, labels in tqdm(
                     train_loader, desc=f"Training Epoch {epoch+1}/{num_epochs}"
                 ):
                     embeddings = embeddings.to(device)
                     labels = labels.to(device)
+                    mask = mask.to(device)
 
                     optimizer.zero_grad()
-                    outputs = self(embeddings)
+                    outputs = self(embeddings, mask=mask)
                     loss = criterion(outputs, labels)
                     loss.backward()
                     optimizer.step()
@@ -178,11 +191,12 @@ class Attention(nn.Module):
                 val_labels = []
 
                 with torch.no_grad():
-                    for embeddings, labels in val_loader:
+                    for embeddings, mask, labels in val_loader:
                         embeddings = embeddings.to(device)
                         labels = labels.to(device)
+                        mask = mask.to(device)
 
-                        outputs = self(embeddings)
+                        outputs = self(embeddings, mask=mask)
                         loss = criterion(outputs, labels)
 
                         total_val_loss += loss.item()
