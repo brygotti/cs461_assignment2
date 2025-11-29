@@ -2,7 +2,7 @@
 #   https://github.com/AMLab-Amsterdam/AttentionDeepMIL/blob/eb0434ba2795711a45d693d60120ae53532b1b93/model.py
 
 import numpy as np
-from sklearn.base import accuracy_score
+from sklearn.metrics import accuracy_score
 from sklearn.model_selection import KFold
 import torch
 import torch.nn as nn
