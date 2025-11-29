@@ -68,7 +68,7 @@ class Attention(nn.Module):
         else:
             # multi-head: one class per head, each output goes through a dedicated linear projection
             x = (M * self.linear.weight).sum(
-                1
+                -1
             ) + self.linear.bias  # batch_size, num_classes
         if not self.training:
             x = F.softmax(x, dim=1)
