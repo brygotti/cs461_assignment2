@@ -4,7 +4,7 @@ tta:
   args:
     norm_eps: 1.0e-5
     norm_momentum: 0.1
-    optim_steps: 2
+    optim_steps: 10
     optim_lr: 0.0001
     optim_method: Adam
     optim_beta: 0.9
