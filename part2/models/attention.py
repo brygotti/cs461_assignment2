@@ -350,5 +350,5 @@ if __name__ == "__main__":
         lr=1e-2,
         collate_fn=attention_collate_fn,
         device=torch.device("cuda" if torch.cuda.is_available() else "cpu"),
-        save_best_fold="ckpts/best_attention_model.pt",
+        save_best_fold=cfg.model.best_weight_path,
     )
