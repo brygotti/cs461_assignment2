@@ -42,14 +42,13 @@ class Attention(nn.Module):
         self.num_classes = num_classes
         self.multi_head = multi_head
         self.attention_heads = 1 if not multi_head else num_classes
-        self.linear_output_dim = 1 if multi_head else num_classes
 
         self.attention = nn.Sequential(
             nn.Linear(self.embed_dim, self.latent_dim),
             nn.Tanh(),
             nn.Linear(self.latent_dim, self.attention_heads),
         )
-        self.linear = nn.Linear(self.embed_dim, self.linear_output_dim)
+        self.linear = nn.Linear(self.embed_dim, self.num_classes)
 
     def forward(self, x, mask=None):
         # x: batch_size, n_patches, embed_dim
@@ -63,11 +62,14 @@ class Attention(nn.Module):
 
         M = torch.bmm(A, x)  # batch_size, attention_heads, embed_dim
 
-        x = self.linear(M)  # batch_size, attention_heads, linear_output_dim
-        if self.multi_head:
-            x = x.squeeze(2)  # batch_size, attention_heads
+        if not self.multi_head:
+            x = x.squeeze(1)  # batch_size, embed_dim
+            x = self.linear(M)  # batch_size, num_classes
         else:
-            x = x.squeeze(1)  # batch_size, linear_output_dim
+            # multi-head: one class per head, each output goes through a dedicated linear projection
+            x = (M * self.linear.weight).sum(
+                1
+            ) + self.linear.bias  # batch_size, num_classes
         if not self.training:
             x = F.softmax(x, dim=1)
         return x
