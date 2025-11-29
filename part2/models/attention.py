@@ -332,7 +332,7 @@ if __name__ == "__main__":
     from utils import set_seed, load_cfg, load_full_dataset, build_model
 
     set_seed(42)
-    cfg = load_cfg("configs/linear_baseline.yaml")
+    cfg = load_cfg("configs/attention.yaml")
     dataset_cls, dataset_args = load_full_dataset(
         cfg.get("dataset"), additional_config={"split": "train"}
     )
