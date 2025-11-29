@@ -86,7 +86,7 @@ class Attention(nn.Module):
         min_delta=0.0001,
     ):
         """
-        Train the linear probe model using k-fold cross-validation.
+        Train the attention model using k-fold cross-validation.
 
         Args:
             dataset: Full dataset (torch.utils.data.Dataset)
@@ -313,7 +313,7 @@ class Attention(nn.Module):
             device: Device to load the model on
 
         Returns:
-            LinearProbe: Model with loaded weights
+            Attention: Model with loaded weights
         """
         checkpoint = torch.load(path, map_location=device)
         model = cls(
