@@ -1,6 +1,7 @@
 # Adapted from
 #   https://github.com/AMLab-Amsterdam/AttentionDeepMIL/blob/eb0434ba2795711a45d693d60120ae53532b1b93/model.py
 
+from copy import deepcopy
 import numpy as np
 from sklearn.metrics import accuracy_score
 from sklearn.model_selection import KFold
@@ -223,7 +224,7 @@ class Attention(nn.Module):
                     best_fold_val_acc = val_accuracy
                     patience_counter = 0
                     # Save best state for this fold
-                    best_fold_state = self.state_dict().copy()
+                    best_fold_state = deepcopy(self.state_dict())
                     print(f"  → New best validation accuracy: {best_fold_val_acc:.4f}")
                 else:
                     patience_counter += 1
