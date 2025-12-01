@@ -19,3 +19,6 @@ Both models are trained using the same 5-fold cross-validation setup as the base
 | `attention_multi_head`| 0.8428   | 0.8318   | 0.8368             | 0.9777  |
 
 Both attention-based methods outperform the baseline linear model across all metrics. The single-head attention model achieves the highest score across metrics, indicating that allowing the model to attend differently to each patch significantly improves performance. The multi-head attention model also shows substantial improvements over the baseline, although it does not perform as well as the single-head attention model in this case. This could be due to the increased complexity of the multi-head attention model, which may require more data or tuning to fully realize its potential. It must also be noted that the multi-head attention model was early stopped a few epochs before the single-head attention model by the early stopping mechanism. These few epochs of difference in training time could have an impact on the final performance as well. Overall, these results demonstrate the effectiveness of attention mechanisms in enhancing model performance for this task.
+
+## Submission
+The method used for the submission is the `attention` model, as it achieved the best performance on the test set.
