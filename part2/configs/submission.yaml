@@ -1,2 +1,12 @@
 model:
   class_path: models.submission.Submission
+  args:
+    embed_dim: 3072
+    latent_dim: 1024
+    num_classes: 7
+    multi_head: false
+
+  best_weight_path: ckpts/best_attention_model.pt
+
+dataset:
+  collate_fn: models.submission.attention_collate_fn
