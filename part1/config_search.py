@@ -14,7 +14,7 @@ from eval import (
 )
 from utils import build_model, load_cfg, load_full_dataset, locate, parse_args
 
-BASE_CONFIG = Path("configs/submission.yaml")
+BASE_CONFIG = Path("configs/tent.yaml")
 
 PARAM_GRID = {
     "tta.args.optim_lr": [0.001, 0.0001],
