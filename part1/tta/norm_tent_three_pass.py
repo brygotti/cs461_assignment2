@@ -1,7 +1,7 @@
 from copy import deepcopy
 
 from tta.base import TTAMethod
-from tta import tent
+import tta.submission as tent
 
 import torch
 from torch import nn
