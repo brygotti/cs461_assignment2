@@ -7,7 +7,7 @@ import torch
 from torch import nn
 
 
-class NormTentTwoPass(TTAMethod):
+class NormTentThreePass(TTAMethod):
 
     def __init__(
         self,
@@ -66,13 +66,17 @@ class NormTentTwoPass(TTAMethod):
         # forward with tent adaptation
         self.configure_tent()
         tent.check_model(self.model)
-        outputs = []
         for minibatch in torch.split(x, self.tent_batch_size):
             for _ in range(self.tent_steps):
-                output = tent.forward_and_adapt(
-                    minibatch, self.model, self.tent_optimizer
-                )
-            outputs.append(output)
+                tent.forward_and_adapt(minibatch, self.model, self.tent_optimizer)
+
+        # now that we learned from tent, do a final forward pass to get outputs
+        self.configure_output_pass()
+        outputs = []
+        with torch.no_grad():
+            for minibatch in torch.split(x, 1024):
+                out = self.model(minibatch)
+                outputs.append(out)
 
         return torch.cat(outputs, dim=0)
 
@@ -104,3 +108,8 @@ class NormTentTwoPass(TTAMethod):
                 m.eval()
                 # enable gradients for scale and shift parameters
                 m.requires_grad_(True)
+
+    def configure_output_pass(self):
+        """Configure model for output pass without adaptation."""
+        self.model.eval()
+        self.model.requires_grad_(False)

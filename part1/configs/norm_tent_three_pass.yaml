@@ -1,6 +1,6 @@
 tta:
-  name: norm_tent_two_pass
-  class_path: tta.norm_tent_two_pass.NormTentTwoPass
+  name: norm_tent_three_pass
+  class_path: tta.norm_tent_three_pass.NormTentThreePass
   args:
     norm_eps: 1.0e-5
     norm_momentum: 0.1
