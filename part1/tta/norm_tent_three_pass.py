@@ -104,9 +104,8 @@ class NormTentThreePass(TTAMethod):
         self.model.requires_grad_(False)
         for m in self.model.modules():
             if isinstance(m, nn.BatchNorm2d):
-                # keep batchnorm stats fixed
-                m.eval()
-                # enable gradients for scale and shift parameters
+                # keep batchnorms in train mode so that tent can use batch statistics (as usually done with tent)
+                # but enable gradients for scale and shift parameters this time
                 m.requires_grad_(True)
 
     def configure_output_pass(self):
