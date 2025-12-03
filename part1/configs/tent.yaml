@@ -1,9 +1,8 @@
 tta:
-  name: norm_tent_three_pass
-  class_path: tta.norm_tent_three_pass.NormTentThreePass
+  name: tent
+  class_path: tta.tent.Tent
   args:
-    norm_eps: 1.0e-5
-    norm_momentum: 0.1
+    episodic: false
     optim_steps: 2
     optim_lr: 0.0001
     optim_method: Adam
@@ -12,8 +11,6 @@ tta:
     optim_dampening: 0.0
     optim_nesterov: true
     optim_wd: 0.0
-    norm_batch_size: 1024
-    tent_batch_size: 512
 
 evaluation:
-  batch_size: 10000
+  batch_size: 512

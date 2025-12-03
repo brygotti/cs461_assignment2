@@ -1,15 +1,10 @@
-# Adapted from:
-#   https://github.com/DequanWang/tent/blob/7d236b42a3020f488a75d041f31a3f4ef4a521ea/tent.py
-#   https://github.com/DequanWang/tent/blob/7d236b42a3020f488a75d041f31a3f4ef4a521ea/cifar10c.py
-from __future__ import annotations
-
-import torch
-
-from torch import nn
-from torch import optim
+from copy import deepcopy
 
 from tta.base import TTAMethod
-from copy import deepcopy
+from tta import tent
+
+import torch
+from torch import nn
 
 
 class Submission(TTAMethod):
@@ -17,7 +12,8 @@ class Submission(TTAMethod):
     def __init__(
         self,
         model,
-        episodic=False,
+        norm_eps=1e-5,
+        norm_momentum=0.1,
         optim_steps=1,
         optim_lr=1e-3,
         optim_method="Adam",
@@ -26,14 +22,19 @@ class Submission(TTAMethod):
         optim_dampening=0.0,
         optim_nesterov=True,
         optim_wd=0.0,
+        norm_batch_size=512,
+        tent_batch_size=512,
     ):
-        model = configure_model(model)
-        check_model(model)
         super().__init__(model)
 
-        params, _ = collect_params(model)
-        optimizer = setup_optimizer(
-            params,
+        # norm configuration
+        self.norm_eps = norm_eps
+        self.norm_momentum = norm_momentum
+
+        # tent configuration
+        tent_params, _ = tent.collect_params(model)
+        tent_optimizer = tent.setup_optimizer(
+            tent_params,
             optim_lr,
             optim_method,
             optim_beta,
@@ -42,155 +43,72 @@ class Submission(TTAMethod):
             optim_nesterov,
             optim_wd,
         )
-        self.optimizer = optimizer
-        self.steps = optim_steps
+        self.tent_optimizer = tent_optimizer
+        self.tent_steps = optim_steps
         assert optim_steps > 0, "tent requires >= 1 step(s) to forward and update"
-        self.episodic = episodic
 
         # note: if the model is never reset, like for continual adaptation,
         # then skipping the state copy would save memory
-        self.model_state, self.optimizer_state = copy_model_and_optimizer(
-            self.model, self.optimizer
-        )
+        self.model_state = deepcopy(self.model.state_dict())
+        self.tent_optimizer_state = deepcopy(self.tent_optimizer.state_dict())
+
+        # batch sizes
+        self.norm_batch_size = norm_batch_size
+        self.tent_batch_size = tent_batch_size
 
     def forward(self, x):
-        if self.episodic:
-            self.reset()
+        # forward with norm adaptation
+        self.configure_norm()
+        with torch.no_grad():
+            for minibatch in torch.split(x, self.norm_batch_size):
+                self.model(minibatch)
 
-        for _ in range(self.steps):
-            outputs = forward_and_adapt(x, self.model, self.optimizer)
+        # forward with tent adaptation
+        self.configure_tent()
+        tent.check_model(self.model)
+        for minibatch in torch.split(x, self.tent_batch_size):
+            for _ in range(self.tent_steps):
+                tent.forward_and_adapt(minibatch, self.model, self.tent_optimizer)
 
-        return outputs
+        # now that we learned from tent, do a final forward pass to get outputs
+        self.configure_output_pass()
+        outputs = []
+        with torch.no_grad():
+            for minibatch in torch.split(x, 1024):
+                out = self.model(minibatch)
+                outputs.append(out)
+
+        return torch.cat(outputs, dim=0)
 
     def reset(self):
-        if self.model_state is None or self.optimizer_state is None:
+        if self.model_state is None or self.tent_optimizer_state is None:
             raise Exception("cannot reset without saved model/optimizer state")
-        load_model_and_optimizer(
-            self.model, self.optimizer, self.model_state, self.optimizer_state
-        )
+        self.model.load_state_dict(self.model_state, strict=True)
+        self.tent_optimizer.load_state_dict(self.tent_optimizer_state)
 
+    def configure_norm(self):
+        """Configure model for norm adaptation."""
+        self.model.eval()
+        for m in self.model.modules():
+            if isinstance(m, nn.BatchNorm2d):
+                # train mode to use batch statistics
+                m.train()
+                m.eps = self.norm_eps
+                m.momentum = self.norm_momentum
 
-def setup_optimizer(
-    params,
-    optim_lr=1e-3,
-    optim_method="Adam",
-    optim_beta=0.9,
-    optim_momentum=0.9,
-    optim_dampening=0.0,
-    optim_nesterov=True,
-    optim_wd=0.0,
-):
-    """Set up optimizer for tent adaptation.
+    def configure_tent(self):
+        """Configure model for tent adaptation."""
+        # train mode, because tent optimizes the model to minimize entropy
+        self.model.train()
+        # disable grad, to (re-)enable only what tent updates
+        self.model.requires_grad_(False)
+        for m in self.model.modules():
+            if isinstance(m, nn.BatchNorm2d):
+                # keep batchnorms in train mode so that tent can use batch statistics (as usually done with tent)
+                # but enable gradients for scale and shift parameters this time
+                m.requires_grad_(True)
 
-    Tent needs an optimizer for test-time entropy minimization.
-    In principle, tent could make use of any gradient optimizer.
-    In practice, we advise choosing Adam or SGD+momentum.
-    For optimization settings, we advise to use the settings from the end of
-    trainig, if known, or start with a low learning rate (like 0.001) if not.
-
-    For best results, try tuning the learning rate and batch size.
-    """
-    if optim_method == "Adam":
-        return optim.Adam(
-            params,
-            lr=optim_lr,
-            betas=(optim_beta, 0.999),
-            weight_decay=optim_wd,
-        )
-    elif optim_method == "SGD":
-        return optim.SGD(
-            params,
-            lr=optim_lr,
-            momentum=optim_momentum,
-            dampening=optim_dampening,
-            weight_decay=optim_wd,
-            nesterov=optim_nesterov,
-        )
-    else:
-        raise NotImplementedError
-
-
-@torch.jit.script
-def softmax_entropy(x: torch.Tensor) -> torch.Tensor:
-    """Entropy of softmax distribution from logits."""
-    return -(x.softmax(1) * x.log_softmax(1)).sum(1)
-
-
-@torch.enable_grad()  # ensure grads in possible no grad context for testing
-def forward_and_adapt(x, model, optimizer):
-    """Forward and adapt model on batch of data.
-
-    Measure entropy of the model prediction, take gradients, and update params.
-    """
-    # forward
-    outputs = model(x)
-    # adapt
-    loss = softmax_entropy(outputs).mean(0)
-    loss.backward()
-    optimizer.step()
-    optimizer.zero_grad()
-    return outputs
-
-
-def collect_params(model):
-    """Collect the affine scale + shift parameters from batch norms.
-
-    Walk the model's modules and collect all batch normalization parameters.
-    Return the parameters and their names.
-
-    Note: other choices of parameterization are possible!
-    """
-    params = []
-    names = []
-    for nm, m in model.named_modules():
-        if isinstance(m, nn.BatchNorm2d):
-            for np, p in m.named_parameters():
-                if np in ["weight", "bias"]:  # weight is scale, bias is shift
-                    params.append(p)
-                    names.append(f"{nm}.{np}")
-    return params, names
-
-
-def copy_model_and_optimizer(model, optimizer):
-    """Copy the model and optimizer states for resetting after adaptation."""
-    model_state = deepcopy(model.state_dict())
-    optimizer_state = deepcopy(optimizer.state_dict())
-    return model_state, optimizer_state
-
-
-def load_model_and_optimizer(model, optimizer, model_state, optimizer_state):
-    """Restore the model and optimizer states from copies."""
-    model.load_state_dict(model_state, strict=True)
-    optimizer.load_state_dict(optimizer_state)
-
-
-def configure_model(model):
-    """Configure model for use with tent."""
-    # train mode, because tent optimizes the model to minimize entropy
-    model.train()
-    # disable grad, to (re-)enable only what tent updates
-    model.requires_grad_(False)
-    # configure norm for tent updates: enable grad + force batch statisics
-    for m in model.modules():
-        if isinstance(m, nn.BatchNorm2d):
-            m.requires_grad_(True)
-            # force use of batch stats in train and eval modes
-            m.track_running_stats = False
-            m.running_mean = None
-            m.running_var = None
-    return model
-
-
-def check_model(model):
-    """Check model for compatability with tent."""
-    is_training = model.training
-    assert is_training, "tent needs train mode: call model.train()"
-    param_grads = [p.requires_grad for p in model.parameters()]
-    has_any_params = any(param_grads)
-    has_all_params = all(param_grads)
-    assert has_any_params, "tent needs params to update: " "check which require grad"
-    assert not has_all_params, (
-        "tent should not update all params: " "check which require grad"
-    )
-    has_bn = any([isinstance(m, nn.BatchNorm2d) for m in model.modules()])
-    assert has_bn, "tent needs normalization for its optimization"
+    def configure_output_pass(self):
+        """Configure model for output pass without adaptation."""
+        self.model.eval()
+        self.model.requires_grad_(False)

@@ -2,7 +2,8 @@ tta:
   name: submission
   class_path: tta.submission.Submission
   args:
-    episodic: false
+    norm_eps: 1.0e-5
+    norm_momentum: 0.1
     optim_steps: 2
     optim_lr: 0.0001
     optim_method: Adam
@@ -11,6 +12,8 @@ tta:
     optim_dampening: 0.0
     optim_nesterov: true
     optim_wd: 0.0
+    norm_batch_size: 1024
+    tent_batch_size: 512
 
 evaluation:
-  batch_size: 512
+  batch_size: 10000
