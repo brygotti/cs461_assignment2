@@ -2,7 +2,7 @@
 > CS-461 Foundation Models and Generative AI
 
 ## Methods
-The provided baseline (`linear_baseline`) first computes an unweighted average of the embeddings of each patch before passing them through a linear layer to obtain class logits. To improve upon this, we implement two attention-based methods inspired by the Attention-based Deep Multiple Instance Learning paper (Ilse et al., 2018). The main idea is to allow the model to attend differently to each patch of a given sample. In other words, instead of doing a simple average of the patch embeddings, we compute a weighted average where the weights are learned through an attention mechanism.
+The provided baseline (`linear_baseline`) first computes an unweighted average of the embeddings of each patch before passing them through a linear layer to obtain class logits. To improve upon this, we implement two attention-based methods inspired by the paper "Attention-based Deep Multiple Instance Learning" (Ilse et al., 2018). The main idea is to allow the model to attend differently to each patch of a given sample. In other words, instead of doing a simple average of the patch embeddings, we compute a weighted average where the weights are learned through an attention mechanism.
 
 The first method (`attention`) is a direct implementation of the attention mechanism described in the paper. It uses a two-layer neural network with tanh activation function to compute attention scores for each patch embedding. These scores are then normalized using a softmax function to obtain attention weights, which are used to compute a weighted average of the patch embeddings. This weighted average is then passed through a linear layer to obtain class logits.
 
