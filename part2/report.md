@@ -12,13 +12,39 @@ Both models are trained using the same 5-fold cross-validation setup as the base
 
 ## Results
 
-| Method                | Accuracy | F1 Score | Balanced Accuracy  | ROC AUC |
-|-----------------------|----------|----------|--------------------|---------|
-| `linear_baseline`     | 0.8083   | 0.7324   | 0.7762             | 0.9350  |
-| `attention`           | 0.8773   | 0.8679   | 0.8637             | 0.9867  |
-| `attention_multi_head`| 0.8428   | 0.8318   | 0.8368             | 0.9777  |
+| Method                | Mean Val. Accuracy | Best Val. Accuracy |
+|-----------------------|--------------------|--------------------|
+| `linear_baseline`     | 0.7354 ± 0.0151    | 0.7632             |
+| `attention`           | 0.7727 ± 0.0221    | 0.8199             |
+| `attention_multi_head`| 0.7622 ± 0.0223    | 0.8008             |
 
-Both attention-based methods outperform the baseline linear model across all metrics. The single-head attention model achieves the highest score across metrics, indicating that allowing the model to attend differently to each patch significantly improves performance. The multi-head attention model also shows substantial improvements over the baseline, although it does not perform as well as the single-head attention model in this case. This could be due to the increased complexity of the multi-head attention model, which may require more data or tuning to fully realize its potential. It must also be noted that the multi-head attention model was early stopped a few epochs before the single-head attention model by the early stopping mechanism. These few epochs of difference in training time could have an impact on the final performance as well. Overall, these results demonstrate the effectiveness of attention mechanisms in enhancing model performance for this task.
+Results can be seen in the table above. The "Mean Val. Accuracy" column corresponds to the average validation accuracy on a 5-fold cross-validation training with early stopping, with "±" corresponding to the standard deviation across the folds. The "Best Val. Accuracy" column corresponds to the validation accuracy of the best fold. Both attention-based methods outperform the baseline, with the single-head attention model achieving the highest mean validation accuracy. The multi-head attention model, while still outperforming the baseline, does not perform as well as the single-head version. This could be due to increased model complexity leading to overfitting, given the limited amount of training data (only 4k samples). Further hyperparameter tuning and regularization techniques could potentially improve the performance of the multi-head attention model.
+
+## Reproduction of results
+To rerun the training for the `attention` method, use the following command:
+```bash
+python -m models.submission
+```
+
+For the `attention_multi_head` method, first update the `configs/submission.yaml` as follows:
+```yaml
+model:
+  class_path: models.submission.Submission
+  args:
+    embed_dim: 3072
+    latent_dim: 1024
+    num_classes: 7
+    multi_head: true
+
+  best_weight_path: ckpts/best_attention_model_multi_head.pt
+
+dataset:
+  collate_fn: models.submission.attention_collate_fn
+```
+Then run:
+```bash
+python -m models.submission
+```
 
 ## Submission
-The method used for the submission is the `attention` model, as it achieved the best performance on the test set.
+The method used for the submission is the `attention` model, as it achieved the best performance on the test set. The model trained on the fold with highest validation accuracy was saved and used as the submission checkpoint.
